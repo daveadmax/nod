@@ -7,6 +7,22 @@ services:
       dockerfile: deployment/self-host/Dockerfile
     image: nod-server:${NOD_IMAGE_TAG:-local}
     restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${COMPOSE_PROJECT_NAME}
+      - traefik.http.routers.nod-http.entryPoints=http
+      - traefik.http.routers.nod-http.middlewares=nod-redirect-to-https
+      - 'traefik.http.routers.nod-http.rule=Host(`nod.followthegreensheep.de`) && PathPrefix(`/`)'
+      - traefik.http.routers.nod-http.service=nod
+      - traefik.http.routers.nod-https.entryPoints=https
+      - traefik.http.routers.nod-https.middlewares=nod-gzip-sse
+      - 'traefik.http.routers.nod-https.rule=Host(`nod.followthegreensheep.de`) && PathPrefix(`/`)'
+      - traefik.http.routers.nod-https.service=nod
+      - traefik.http.routers.nod-https.tls.certresolver=letsencrypt
+      - traefik.http.routers.nod-https.tls=true
+      - traefik.http.services.nod.loadbalancer.server.port=4310
+      - traefik.http.middlewares.nod-gzip-sse.compress.excludedcontenttypes=text/event-stream
+      - traefik.http.middlewares.nod-redirect-to-https.redirectscheme.scheme=https
     init: true
     env_file: ${NOD_ENV_FILE:-.env}
     environment:
@@ -34,7 +50,7 @@ services:
     security_opt: [no-new-privileges:true]
     pids_limit: 512
     mem_limit: ${NOD_SERVER_MEMORY:-2g}
-    networks: [backend, control, outbound]
+    networks: [backend, control, outbound, nod-proxy]
     depends_on:
       postgres:
         condition: service_healthy
@@ -202,6 +218,9 @@ services:
       retries: 6
 
 networks:
+  nod-proxy:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME}
   backend:
     internal: true
   control:
@@ -212,9 +231,23 @@ networks:
 
 volumes:
   server-data:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME}_server-data
   postgres-data:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME}_postgres-data
   workspace-data:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME}_workspace-data
   workspace-tools:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME}_workspace-tools
   browser-data:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME}_browser-data
   https-data:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME}_https-data
   https-config:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME}_https-config
